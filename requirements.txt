@@ -1,0 +1,1 @@
+Flask==3.1.1\nFlask-SQLAlchemy==3.1.1\nFlask-WTF==1.2.2\ngunicorn==23.0.0\npsycopg[binary]==3.2.9\n
