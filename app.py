@@ -176,6 +176,67 @@ def dashboard():
     )
 
 
+@app.route("/products", methods=["GET", "POST"])
+def products():
+    user = current_user()
+    if not user:
+        return redirect(url_for("login"))
+
+    if request.method == "POST":
+        action = request.form.get("action", "add")
+        product_id = request.form.get("product_id", type=int)
+
+        if action == "delete":
+            product = Product.query.filter_by(id=product_id, shop_id=user.shop_id).first()
+            if product:
+                db.session.delete(product)
+                db.session.commit()
+                flash("Produk berhasil dihapus.", "success")
+            else:
+                flash("Produk tidak ditemukan.", "error")
+            return redirect(url_for("products"))
+
+        name = request.form.get("name", "").strip()
+        price = request.form.get("price", type=int)
+        stock = request.form.get("stock", type=int)
+
+        if not name or len(name) > 160:
+            flash("Nama produk wajib diisi (maksimal 160 karakter).", "error")
+        elif price is None or price < 0:
+            flash("Harga harus berupa angka nol atau lebih.", "error")
+        elif stock is None or stock < 0:
+            flash("Stok harus berupa angka nol atau lebih.", "error")
+        elif action == "edit":
+            product = Product.query.filter_by(id=product_id, shop_id=user.shop_id).first()
+            if not product:
+                flash("Produk tidak ditemukan.", "error")
+            else:
+                product.name = name
+                product.price = price
+                product.stock = stock
+                db.session.commit()
+                flash("Produk berhasil diperbarui.", "success")
+                return redirect(url_for("products"))
+        else:
+            product = Product(shop_id=user.shop_id, name=name, price=price, stock=stock)
+            db.session.add(product)
+            db.session.commit()
+            flash("Produk berhasil ditambahkan.", "success")
+            return redirect(url_for("products"))
+
+    product_list = Product.query.filter_by(shop_id=user.shop_id).order_by(Product.name.asc()).all()
+    return render_template("products.html", user=user, products=product_list)
+
+
+@app.get("/products/<int:product_id>/edit")
+def edit_product(product_id):
+    user = current_user()
+    if not user:
+        return redirect(url_for("login"))
+    product = Product.query.filter_by(id=product_id, shop_id=user.shop_id).first_or_404()
+    return render_template("products.html", user=user, products=Product.query.filter_by(shop_id=user.shop_id).order_by(Product.name.asc()).all(), editing=product)
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "GD SMART ASSISTANT"}
