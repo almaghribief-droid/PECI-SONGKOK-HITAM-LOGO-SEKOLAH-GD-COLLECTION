@@ -90,7 +90,7 @@ public class MainActivity extends Activity {
         addButton(root, "CETAK NOTA 80 mm", v -> printReceipt());
         addButton(root, "CETAK ULANG FILE TERAKHIR", v -> printSharedFile());
         TextView shareHint = new TextView(this);
-        shareHint.setText("\\nUntuk cetak resi: buka PDF/gambar resi dari Shopee atau TikTok, pilih Bagikan > GD PRINT 80. File PDF dan gambar akan dicetak sebagai bitmap hitam-putih.");
+        shareHint.setText("\nUntuk cetak resi: buka PDF/gambar resi dari Shopee atau TikTok, pilih Bagikan > GD PRINT 80. File PDF dan gambar akan dicetak sebagai bitmap hitam-putih.");
         shareHint.setTextSize(12);
         shareHint.setTextColor(0xFF526174);
         root.addView(shareHint);
@@ -171,7 +171,81 @@ public class MainActivity extends Activity {
         });
     }
 
-    private Uri sharedUri;\n    private String sharedMime;\n\n    @Override protected void onNewIntent(Intent intent) {\n        super.onNewIntent(intent);\n        setIntent(intent);\n        handleIncomingShare(intent);\n    }\n\n    private void handleIncomingShare(Intent intent) {\n        if (intent == null) return;\n        Uri uri = null;\n        String action = intent.getAction();\n        if (Intent.ACTION_SEND.equals(action)) {\n            if (Build.VERSION.SDK_INT >= 33) uri = intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri.class);\n            else { Object value = intent.getParcelableExtra(Intent.EXTRA_STREAM); if (value instanceof Uri) uri = (Uri) value; }\n        } else if (Intent.ACTION_VIEW.equals(action)) { uri = intent.getData(); }\n        if (uri != null) {\n            sharedUri = uri; sharedMime = intent.getType();\n            setStatus("File diterima. Sambungkan printer, lalu tekan CETAK ULANG FILE TERAKHIR.");\n        }\n    }\n\n    private void printSharedFile() {\n        final Uri uri = sharedUri;\n        if (uri == null) { setStatus("Belum ada file. Bagikan PDF/JPG/PNG ke GD PRINT 80 terlebih dahulu."); return; }\n        setStatus("Menyiapkan file untuk dicetak...");\n        worker.execute(() -> {\n            try {\n                Bitmap source;\n                String type = sharedMime == null ? getContentResolver().getType(uri) : sharedMime;\n                if (type != null && type.toLowerCase().contains("pdf")) {\n                    try (ParcelFileDescriptor fd = getContentResolver().openFileDescriptor(uri, "r"); PdfRenderer renderer = new PdfRenderer(fd)) {\n                        if (renderer.getPageCount() < 1) throw new Exception("PDF kosong.");\n                        PdfRenderer.Page page = renderer.openPage(0);\n                        float scale = Math.min(3.0f, 576f / (float) page.getWidth());\n                        source = Bitmap.createBitmap(Math.max(1, (int)(page.getWidth()*scale)), Math.max(1, (int)(page.getHeight()*scale)), Bitmap.Config.ARGB_8888);\n                        source.eraseColor(Color.WHITE); page.render(source, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT); page.close();\n                    }\n                } else {\n                    try (java.io.InputStream in = getContentResolver().openInputStream(uri)) { source = BitmapFactory.decodeStream(in); }\n                    if (source == null) throw new Exception("Format file tidak terbaca. Gunakan PDF, JPG, atau PNG.");\n                }\n                Bitmap scaled;\n                if (source.getWidth() > 576) { int h = Math.max(1, Math.round(source.getHeight() * (576f/source.getWidth()))); scaled = Bitmap.createScaledBitmap(source, 576, h, true); }\n                else scaled = source;\n                byte[] raster = bitmapToEscPos(scaled);\n                OutputStream out;\n                if (socket == null || !socket.isConnected()) throw new Exception("Printer belum tersambung.");\n                out = socket.getOutputStream(); out.write(new byte[]{0x1B,0x40}); out.write(raster); out.write(new byte[]{0x1B,0x64,0x04}); out.flush();\n                runOnUiThread(() -> setStatus("File berhasil dikirim ke printer. Periksa hasil cetak."));\n                if (scaled != source) scaled.recycle(); source.recycle();\n            } catch (Exception e) { runOnUiThread(() -> setStatus("Cetak file gagal: " + e.getMessage())); }\n        });\n    }\n\n    private byte[] bitmapToEscPos(Bitmap bitmap) {\n        int width = bitmap.getWidth(), height = bitmap.getHeight();\n        int widthBytes = (width + 7) / 8;\n        byte[] out = new byte[8 + widthBytes * height];\n        out[0]=0x1D; out[1]=0x76; out[2]=0x30; out[3]=0;\n        out[4]=(byte)(widthBytes & 0xFF); out[5]=(byte)((widthBytes >> 8) & 0xFF);\n        out[6]=(byte)(height & 0xFF); out[7]=(byte)((height >> 8) & 0xFF);\n        int k=8;\n        for (int y=0;y<height;y++) {\n            for (int xb=0;xb<widthBytes;xb++) {\n                int bits=0;\n                for (int bit=0;bit<8;bit++) { int x=xb*8+bit; if (x<width) { int c=bitmap.getPixel(x,y); int gray=(Color.red(c)*299+Color.green(c)*587+Color.blue(c)*114)/1000; if (gray<180) bits |= (0x80 >> bit); } }\n                out[k++]=(byte)bits;\n            }\n        }\n        return out;\n    }\n\n    private void printTest() {
+    private Uri sharedUri;
+    private String sharedMime;
+
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleIncomingShare(intent);
+    }
+
+    private void handleIncomingShare(Intent intent) {
+        if (intent == null) return;
+        Uri uri = null;
+        String action = intent.getAction();
+        if (Intent.ACTION_SEND.equals(action)) {
+            if (Build.VERSION.SDK_INT >= 33) uri = intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri.class);
+            else { Object value = intent.getParcelableExtra(Intent.EXTRA_STREAM); if (value instanceof Uri) uri = (Uri) value; }
+        } else if (Intent.ACTION_VIEW.equals(action)) { uri = intent.getData(); }
+        if (uri != null) {
+            sharedUri = uri; sharedMime = intent.getType();
+            setStatus("File diterima. Sambungkan printer, lalu tekan CETAK ULANG FILE TERAKHIR.");
+        }
+    }
+
+    private void printSharedFile() {
+        final Uri uri = sharedUri;
+        if (uri == null) { setStatus("Belum ada file. Bagikan PDF/JPG/PNG ke GD PRINT 80 terlebih dahulu."); return; }
+        setStatus("Menyiapkan file untuk dicetak...");
+        worker.execute(() -> {
+            try {
+                Bitmap source;
+                String type = sharedMime == null ? getContentResolver().getType(uri) : sharedMime;
+                if (type != null && type.toLowerCase().contains("pdf")) {
+                    try (ParcelFileDescriptor fd = getContentResolver().openFileDescriptor(uri, "r"); PdfRenderer renderer = new PdfRenderer(fd)) {
+                        if (renderer.getPageCount() < 1) throw new Exception("PDF kosong.");
+                        PdfRenderer.Page page = renderer.openPage(0);
+                        float scale = Math.min(3.0f, 576f / (float) page.getWidth());
+                        source = Bitmap.createBitmap(Math.max(1, (int)(page.getWidth()*scale)), Math.max(1, (int)(page.getHeight()*scale)), Bitmap.Config.ARGB_8888);
+                        source.eraseColor(Color.WHITE); page.render(source, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT); page.close();
+                    }
+                } else {
+                    try (java.io.InputStream in = getContentResolver().openInputStream(uri)) { source = BitmapFactory.decodeStream(in); }
+                    if (source == null) throw new Exception("Format file tidak terbaca. Gunakan PDF, JPG, atau PNG.");
+                }
+                Bitmap scaled;
+                if (source.getWidth() > 576) { int h = Math.max(1, Math.round(source.getHeight() * (576f/source.getWidth()))); scaled = Bitmap.createScaledBitmap(source, 576, h, true); }
+                else scaled = source;
+                byte[] raster = bitmapToEscPos(scaled);
+                OutputStream out;
+                if (socket == null || !socket.isConnected()) throw new Exception("Printer belum tersambung.");
+                out = socket.getOutputStream(); out.write(new byte[]{0x1B,0x40}); out.write(raster); out.write(new byte[]{0x1B,0x64,0x04}); out.flush();
+                runOnUiThread(() -> setStatus("File berhasil dikirim ke printer. Periksa hasil cetak."));
+                if (scaled != source) scaled.recycle(); source.recycle();
+            } catch (Exception e) { runOnUiThread(() -> setStatus("Cetak file gagal: " + e.getMessage())); }
+        });
+    }
+
+    private byte[] bitmapToEscPos(Bitmap bitmap) {
+        int width = bitmap.getWidth(), height = bitmap.getHeight();
+        int widthBytes = (width + 7) / 8;
+        byte[] out = new byte[8 + widthBytes * height];
+        out[0]=0x1D; out[1]=0x76; out[2]=0x30; out[3]=0;
+        out[4]=(byte)(widthBytes & 0xFF); out[5]=(byte)((widthBytes >> 8) & 0xFF);
+        out[6]=(byte)(height & 0xFF); out[7]=(byte)((height >> 8) & 0xFF);
+        int k=8;
+        for (int y=0;y<height;y++) {
+            for (int xb=0;xb<widthBytes;xb++) {
+                int bits=0;
+                for (int bit=0;bit<8;bit++) { int x=xb*8+bit; if (x<width) { int c=bitmap.getPixel(x,y); int gray=(Color.red(c)*299+Color.green(c)*587+Color.blue(c)*114)/1000; if (gray<180) bits |= (0x80 >> bit); } }
+                out[k++]=(byte)bits;
+            }
+        }
+        return out;
+    }
+
+    private void printTest() {
         byte[] data = new byte[]{0x1B, 0x40, 0x1B, 0x61, 0x01};
         data = join(data, textBytes("GD PRINT 80\nTES CETAK BERHASIL\n"));
         data = join(data, new byte[]{0x1B, 0x61, 0x00});
