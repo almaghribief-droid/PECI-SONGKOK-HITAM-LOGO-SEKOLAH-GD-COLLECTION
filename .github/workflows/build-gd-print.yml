@@ -1,0 +1,36 @@
+name: Build GD PRINT APK
+
+on:
+  push:
+    branches: [main, gd-print-universal-v2]
+    paths:
+      - "android-gd-print-80/**"
+      - ".github/workflows/build-gd-print.yml"
+  pull_request:
+    paths:
+      - "android-gd-print-80/**"
+      - ".github/workflows/build-gd-print.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Build debug APK
+        working-directory: android-gd-print-80
+        run: gradle assembleDebug
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: gd-print-debug-apk
+          path: android-gd-print-80/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
