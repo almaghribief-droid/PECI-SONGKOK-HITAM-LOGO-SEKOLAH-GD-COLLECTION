@@ -151,7 +151,7 @@ public class MainActivity extends Activity {
 
     private void requestBluetoothPermission() {
         if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED)
-            requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT},REQ_BT);
+            requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN},REQ_BT);
     }
     @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] results) {
         super.onRequestPermissionsResult(requestCode,permissions,results);
@@ -361,11 +361,12 @@ public class MainActivity extends Activity {
     private void printDocument() {
         if (documentBitmap == null) { setStatus("Belum ada dokumen. Bagikan atau pilih PDF/JPG/PNG."); return; }
         Bitmap b = preparedBitmap();
+        String selectedTransport = String.valueOf(transport.getSelectedItem());
         setStatus("Menyiapkan data cetak...");
         worker.execute(() -> {
             try {
                 byte[] data = rasterCommand(b);
-                sendBytesNow(data);
+                sendBytesNow(data, selectedTransport);
                 runOnUiThread(() -> setStatus("Data dokumen dikirim. Periksa hasil cetak."));
             } catch(Exception e) { runOnUiThread(() -> setStatus("Cetak gagal: "+e.getMessage())); }
         });
@@ -402,7 +403,9 @@ public class MainActivity extends Activity {
         });
     }
     private void sendBytesNow(byte[] data) throws Exception {
-        String method=String.valueOf(transport.getSelectedItem());
+        sendBytesNow(data, String.valueOf(transport.getSelectedItem()));
+    }
+    private void sendBytesNow(byte[] data, String method) throws Exception {
         if (method.startsWith("Bluetooth")) {
             if (btSocket==null || !btSocket.isConnected()) throw new Exception("Bluetooth belum tersambung.");
             OutputStream out=btSocket.getOutputStream(); out.write(data); out.flush();
