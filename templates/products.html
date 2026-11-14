@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Produk & Stok — GD SMART ASSISTANT</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+<main class="wrap">
+<header class="top">
+<a class="brand" href="{{ url_for('dashboard') }}">GD SMART ASSISTANT <small>YOUR SMART BUSINESS PARTNER</small></a>
+<a class="btn ghost small" href="{{ url_for('dashboard') }}">Dashboard</a>
+</header>
+<section class="dash-head">
+<p class="eyebrow">INVENTORY MANAGEMENT</p>
+<h1>Produk & Stok</h1>
+<p class="muted">Kelola produk untuk toko <strong>{{ user.shop.name }}</strong>.</p>
+</section>
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for category, message in messages %}<div class="alert {{ category }}">{{ message }}</div>{% endfor %}
+{% endwith %}
+<section class="auth-card">
+<h2>{% if editing %}Ubah produk{% else %}Tambah produk baru{% endif %}</h2>
+<form method="post" action="{{ url_for('products') }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="action" value="{% if editing %}edit{% else %}add{% endif %}">
+{% if editing %}<input type="hidden" name="product_id" value="{{ editing.id }}">{% endif %}
+<label>Nama produk<input name="name" maxlength="160" required value="{{ editing.name if editing else '' }}" placeholder="Contoh: Songkok hitam bordir"></label>
+<label>Harga (Rp)<input name="price" type="number" min="0" step="1" required value="{{ editing.price if editing else '' }}" placeholder="Contoh: 25000"></label>
+<label>Stok<input name="stock" type="number" min="0" step="1" required value="{{ editing.stock if editing else '' }}" placeholder="Contoh: 20"></label>
+<button class="btn full" type="submit">{% if editing %}Simpan Perubahan{% else %}Tambah Produk{% endif %}</button>
+{% if editing %}<p class="switch"><a href="{{ url_for('products') }}">Batal mengubah</a></p>{% endif %}
+</form>
+</section>
+<section class="auth-card">
+<h2>Daftar produk <small>({{ products|length }})</small></h2>
+{% if products %}
+<div class="table-wrap"><table class="product-table">
+<thead><tr><th>Nama</th><th>Harga</th><th>Stok</th><th>Aksi</th></tr></thead>
+<tbody>
+{% for product in products %}
+<tr>
+<td>{{ product.name }}</td>
+<td>Rp {{ "{:,.0f}".format(product.price).replace(",", ".") }}</td>
+<td>{{ product.stock }}</td>
+<td class="actions-cell"><a href="{{ url_for('edit_product', product_id=product.id) }}">Ubah</a>
+<form method="post" action="{{ url_for('products') }}" onsubmit="return confirm('Hapus produk ini?')">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="action" value="delete">
+<input type="hidden" name="product_id" value="{{ product.id }}">
+<button class="link-danger" type="submit">Hapus</button>
+</form></td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+{% else %}
+<p class="muted">Belum ada produk. Tambahkan produk pertama melalui formulir di atas.</p>
+{% endif %}
+</section>
+<p class="foot">Daftar produk hanya menampilkan data milik toko yang sedang masuk.</p>
+</main>
+</body>
+</html>
