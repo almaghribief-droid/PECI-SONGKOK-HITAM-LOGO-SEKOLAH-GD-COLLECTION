@@ -77,6 +77,7 @@ public class MainActivity extends Activity {
         cropHelp.setTextSize(12); cropHelp.setTextColor(0xFF526174); root.addView(cropHelp);
         cropView=new CropImageView(this);
         LinearLayout.LayoutParams cropParams=new LinearLayout.LayoutParams(-1,dp(290)); cropParams.topMargin=dp(8); root.addView(cropView,cropParams);
+        addButton(root,"RESET CROP - TAMPILKAN LABEL UTUH",v->{cropView.resetCrop();updatePreview();});
         addButton(root,"PERBARUI PREVIEW HASIL CROP",v->updatePreview());
         addLabel(root,"Preview hasil yang akan dicetak");
         preview=new ImageView(this); preview.setBackgroundColor(0xFFE2E8F0); preview.setScaleType(ImageView.ScaleType.FIT_CENTER);
