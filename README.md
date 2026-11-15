@@ -4,7 +4,8 @@
 ## Current build
 This repository contains:
 - `index.html`: public static landing page for GitHub Pages.
-- `app.py`: Flask backend for shop registration, login, logout, and a tenant-scoped dashboard.
+- `app.py`: Flask backend for shop registration, login, logout, tenant-scoped dashboard, product inventory, and multi-item sales transactions.
+- `templates/sales.html` and `templates/sale_detail.html`: sales entry, transaction history, and receipt detail.
 - `templates/` and `static/`: backend-served pages and styles.
 - `render.yaml`: deployment blueprint for a Render web service and PostgreSQL database.
 
@@ -32,4 +33,4 @@ python app.py
 Open `http://localhost:5000`.
 
 ## Important production work still required
-This is an initial account and tenant-isolation foundation, not a finished commercial SaaS. Before taking real customer data, add database migrations, automated security and tenant-isolation tests, email verification, password reset, rate limiting, backups, audit logging, billing/subscriptions, and operational monitoring. Product/customer/order CRUD and the AI integration are not implemented yet. Never use the development SECRET_KEY in production.
+This is an initial account and tenant-isolation foundation, not a finished commercial SaaS. Before taking real customer data, add database migrations, automated security and tenant-isolation tests, email verification, password reset, rate limiting, backups, audit logging, billing/subscriptions, and operational monitoring. Customer management is currently captured during sales entry; standalone customer CRUD, order cancellation/refunds and stock restoration, payment methods, reports/exports, billing/subscriptions, and the AI integration are not implemented yet. Sales transactions reduce stock and preserve item name/price snapshots. Never use the development SECRET_KEY in production.
