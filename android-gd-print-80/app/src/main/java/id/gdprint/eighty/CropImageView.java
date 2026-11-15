@@ -7,15 +7,16 @@ import android.view.View;
 
 public class CropImageView extends View {
     private Bitmap bitmap;
-    private final Paint imagePaint = new Paint(3);
-    private final Paint shadePaint = new Paint(3);
-    private final Paint borderPaint = new Paint(3);
-    private final Paint handlePaint = new Paint(3);
+    private final Paint imagePaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+    private final Paint shadePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint borderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint handlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF imageRect = new RectF();
-    private final RectF crop = new RectF();
-    private float downX, downY;
-    private boolean resizing, moving;
-    private float scale, offsetX, offsetY;
+    private final RectF crop = new RectF(0f,0f,1f,1f);
+    private float downX, downY, offsetX, offsetY;
+    private int activeCorner = -1;
+    private boolean moving;
+    private static final float MIN_CROP = 0.02f;
 
     public CropImageView(Context c) {
         super(c);
@@ -30,7 +31,11 @@ public class CropImageView extends View {
 
     public void setBitmap(Bitmap b) {
         bitmap = b;
-        if (b != null) crop.set(0.06f, 0.06f, 0.94f, 0.94f);
+        resetCrop();
+    }
+
+    public void resetCrop() {
+        crop.set(0f,0f,1f,1f);
         invalidate();
     }
 
@@ -47,55 +52,71 @@ public class CropImageView extends View {
         super.onDraw(c);
         c.drawColor(0xFF182536);
         if(bitmap==null) return;
-        float sx=getWidth()/(float)bitmap.getWidth();
-        float sy=getHeight()/(float)bitmap.getHeight();
-        scale=Math.min(sx,sy);
+        float scale=Math.min(getWidth()/(float)bitmap.getWidth(),getHeight()/(float)bitmap.getHeight());
         float w=bitmap.getWidth()*scale, h=bitmap.getHeight()*scale;
         offsetX=(getWidth()-w)/2f; offsetY=(getHeight()-h)/2f;
         imageRect.set(offsetX,offsetY,offsetX+w,offsetY+h);
         c.drawBitmap(bitmap,null,imageRect,imagePaint);
-        RectF cr=new RectF(offsetX+crop.left*w,offsetY+crop.top*h,offsetX+crop.right*w,offsetY+crop.bottom*h);
-        c.save();
+        RectF cr=toViewRect();
         Path outside=new Path(); outside.addRect(imageRect,Path.Direction.CW);
         Path inside=new Path(); inside.addRect(cr,Path.Direction.CW);
         outside.op(inside,Path.Op.DIFFERENCE);
         c.drawPath(outside,shadePaint);
         c.drawRect(cr,borderPaint);
-        float rad=12f;
+        float rad=dp(9);
         c.drawCircle(cr.left,cr.top,rad,handlePaint);
         c.drawCircle(cr.right,cr.top,rad,handlePaint);
         c.drawCircle(cr.left,cr.bottom,rad,handlePaint);
         c.drawCircle(cr.right,cr.bottom,rad,handlePaint);
-        c.restore();
     }
+
+    private float dp(float v){return v*getResources().getDisplayMetrics().density;}
+    private RectF toViewRect(){
+        float w=imageRect.width(),h=imageRect.height();
+        return new RectF(offsetX+crop.left*w,offsetY+crop.top*h,
+            offsetX+crop.right*w,offsetY+crop.bottom*h);
+    }
+    private float clamp(float v){return Math.max(0f,Math.min(1f,v));}
 
     @Override public boolean onTouchEvent(MotionEvent e) {
         if(bitmap==null) return false;
         float w=imageRect.width(), h=imageRect.height();
         if(w<=0||h<=0) return false;
-        float nx=(e.getX()-offsetX)/w, ny=(e.getY()-offsetY)/h;
+        float nx=clamp((e.getX()-offsetX)/w), ny=clamp((e.getY()-offsetY)/h);
         if(e.getAction()==MotionEvent.ACTION_DOWN) {
             downX=nx; downY=ny;
-            resizing=Math.abs(nx-crop.right)<0.10f && Math.abs(ny-crop.bottom)<0.10f;
-            moving=!resizing && crop.contains(nx,ny);
+            float threshold=dp(24);
+            RectF cr=toViewRect();
+            float[][] corners={{cr.left,cr.top},{cr.right,cr.top},{cr.left,cr.bottom},{cr.right,cr.bottom}};
+            activeCorner=-1; float best=threshold;
+            for(int i=0;i<4;i++){
+                float dx=e.getX()-corners[i][0],dy=e.getY()-corners[i][1];
+                float dist=(float)Math.sqrt(dx*dx+dy*dy);
+                if(dist<best){best=dist;activeCorner=i;}
+            }
+            moving=activeCorner<0&&crop.contains(nx,ny);
             return true;
         } else if(e.getAction()==MotionEvent.ACTION_MOVE) {
-            float dx=nx-downX, dy=ny-downY;
-            if(resizing) {
-                crop.right=Math.max(crop.left+0.08f,Math.min(1f,nx));
-                crop.bottom=Math.max(crop.top+0.08f,Math.min(1f,ny));
+            if(activeCorner>=0){
+                float minX=MIN_CROP,minY=MIN_CROP;
+                if(activeCorner==0){crop.left=Math.min(nx,crop.right-minX);crop.top=Math.min(ny,crop.bottom-minY);}
+                if(activeCorner==1){crop.right=Math.max(nx,crop.left+minX);crop.top=Math.min(ny,crop.bottom-minY);}
+                if(activeCorner==2){crop.left=Math.min(nx,crop.right-minX);crop.bottom=Math.max(ny,crop.top+minY);}
+                if(activeCorner==3){crop.right=Math.max(nx,crop.left+minX);crop.bottom=Math.max(ny,crop.top+minY);}
+                crop.left=clamp(crop.left);crop.top=clamp(crop.top);
+                crop.right=clamp(crop.right);crop.bottom=clamp(crop.bottom);
             } else if(moving) {
-                float cw=crop.width(), ch=crop.height();
-                float left=Math.max(0,Math.min(1-cw,crop.left+dx));
-                float top=Math.max(0,Math.min(1-ch,crop.top+dy));
+                float dx=nx-downX,dy=ny-downY,cw=crop.width(),ch=crop.height();
+                float left=Math.max(0f,Math.min(1f-cw,crop.left+dx));
+                float top=Math.max(0f,Math.min(1f-ch,crop.top+dy));
                 crop.set(left,top,left+cw,top+ch);
             }
-            downX=nx; downY=ny; invalidate(); return true;
-        } else if(e.getAction()==MotionEvent.ACTION_UP) {
-            resizing=false; moving=false; performClick(); return true;
+            downX=nx;downY=ny;invalidate();return true;
+        } else if(e.getAction()==MotionEvent.ACTION_UP||e.getAction()==MotionEvent.ACTION_CANCEL) {
+            activeCorner=-1;moving=false;performClick();return true;
         }
         return true;
     }
 
-    @Override public boolean performClick() { super.performClick(); return true; }
+    @Override public boolean performClick(){super.performClick();return true;}
 }
