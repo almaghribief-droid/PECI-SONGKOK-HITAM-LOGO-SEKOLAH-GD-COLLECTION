@@ -24,7 +24,7 @@ public class MainActivity extends Activity {
     private static final UUID SPP = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
     private BluetoothAdapter adapter;
     private BluetoothSocket socket;
-    private Spinner printerSpinner;
+    private Spinner printerSpinner, densitySpinner;
     private final ArrayList<BluetoothDevice> devices = new ArrayList<>();
     private TextView status;
     private EditText shop, address, orderNo, item, qty, price, paid;
@@ -67,6 +67,17 @@ public class MainActivity extends Activity {
         root.addView(printerSpinner);
         addButton(root, "Muat printer Bluetooth yang sudah dipasangkan", v -> loadPaired());
         addButton(root, "Sambungkan printer terpilih", v -> connectPrinter());
+        TextView densityLabel = new TextView(this);
+        densityLabel.setText("Ketebalan cetak (Print Density 1–5)");
+        densityLabel.setTextSize(13);
+        densityLabel.setPadding(0, 14, 0, 3);
+        root.addView(densityLabel);
+        densitySpinner = new Spinner(this);
+        String[] densityOptions = {"1 - Sangat tipis", "2 - Tipis", "3 - Normal", "4 - Pekat", "5 - Sangat pekat"};
+        densitySpinner.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, densityOptions));
+        densitySpinner.setSelection(2);
+        root.addView(densitySpinner);
+
 
         shop = field(root, "Nama toko", "GD COLLECTION");
         address = field(root, "Alamat toko", "Kebumen");
@@ -156,7 +167,9 @@ public class MainActivity extends Activity {
     }
 
     private void printTest() {
-        byte[] data = new byte[]{0x1B, 0x40, 0x1B, 0x61, 0x01};
+        byte[] data = new byte[]{0x1B, 0x40};
+        data = join(data, densityCommand());
+        data = join(data, new byte[]{0x1B, 0x61, 0x01});
         data = join(data, textBytes("GD PRINT 80\nTES CETAK BERHASIL\n"));
         data = join(data, new byte[]{0x1B, 0x61, 0x00});
         data = join(data, textBytes("--------------------------------\nBluetooth ESC/POS\nUkuran kertas: 80 mm\n\n\n"));
@@ -186,10 +199,27 @@ public class MainActivity extends Activity {
             s.append("KEMBALI     ").append(rupiah(pay-total)).append("\n");
             s.append("\nTerima kasih!\n");
             byte[] data = new byte[]{0x1B, 0x40};
-            data = join(data, textBytes(s.toString()));
+            data = join(data, densityCommand());
+            data = join(data, new byte[]{0x1B, 0x61, 0x01});
+            data = join(data, textBytes(name + "\n" + addr + "\n"));
+            data = join(data, new byte[]{0x1B, 0x61, 0x00});
+            data = join(data, textBytes("--------------------------------\n"));
+            data = join(data, textBytes("No: " + no + "\n" + product + "\n"));
+            data = join(data, textBytes(q + " x " + rupiah(p) + " = " + rupiah(total) + "\n"));
+            data = join(data, textBytes("--------------------------------\n"));
+            data = join(data, textBytes("TOTAL       " + rupiah(total) + "\n"));
+            data = join(data, textBytes("DIBAYAR     " + rupiah(pay) + "\n"));
+            data = join(data, textBytes("KEMBALI     " + rupiah(pay-total) + "\n\nTerima kasih!\n"));
             data = join(data, new byte[]{0x1B, 0x64, 0x04});
             send(data);
         } catch (Exception e) { setStatus("Periksa jumlah dan nominal angka."); }
+    }
+
+    // ESC/POS GS ( E, Function 5: print density. Firmware support varies by printer.
+    private byte[] densityCommand() {
+        int level = densitySpinner == null ? 3 : densitySpinner.getSelectedItemPosition() + 1;
+        int density = level * 2;
+        return new byte[]{0x1D, 0x28, 0x45, 0x02, 0x00, 0x05, (byte)density};
     }
 
     private String center(String s) { return s == null ? "" : s; }
