@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Transaksi Penjualan — GD SMART ASSISTANT</title><link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}"></head>
+<body><main class="wrap">
+<header class="top"><a class="brand" href="{{ url_for('dashboard') }}">GD SMART ASSISTANT <small>YOUR SMART BUSINESS PARTNER</small></a><a class="btn ghost small" href="{{ url_for('dashboard') }}">Dashboard</a></header>
+<section class="dash-head"><p class="eyebrow">SALES MANAGEMENT</p><h1>Transaksi Penjualan</h1><p class="muted">Toko: <strong>{{ user.shop.name }}</strong>. Stok berkurang otomatis setelah transaksi berhasil.</p></section>
+{% with messages = get_flashed_messages(with_categories=true) %}{% for category, message in messages %}<div class="alert {{ category }}">{{ message }}</div>{% endfor %}{% endwith %}
+<section class="auth-card"><h2>Buat transaksi baru</h2>
+{% if products %}
+<form method="post" id="sale-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label>Nama pelanggan (opsional)<input name="customer_name" maxlength="160" placeholder="Pelanggan umum"></label>
+<label>Nomor telepon (opsional)<input name="customer_phone" maxlength="40" placeholder="08xxxxxxxxxx"></label>
+<div id="items">
+<div class="sale-line"><label>Produk<select name="product_id"><option value="">Pilih produk</option>{% for p in products %}<option value="{{ p.id }}">{{ p.name }} — Rp {{ "{:,.0f}".format(p.price).replace(",", ".") }} · Stok {{ p.stock }}</option>{% endfor %}</select></label><label>Jumlah<input type="number" name="quantity" min="1" value="1"></label></div>
+</div>
+<button type="button" class="btn ghost small" id="add-line">+ Tambah barang</button>
+<button class="btn full" type="submit">Simpan Transaksi & Kurangi Stok</button>
+</form>
+{% else %}<p class="muted">Belum ada produk. Tambahkan produk dan stok terlebih dahulu.</p><a class="btn" href="{{ url_for('products') }}">Buka Produk & Stok</a>{% endif %}
+</section>
+<section class="auth-card"><h2>Riwayat transaksi terbaru</h2>
+{% if orders %}<div class="table-wrap"><table class="product-table"><thead><tr><th>No. Transaksi</th><th>Tanggal</th><th>Total</th><th>Detail</th></tr></thead><tbody>
+{% for o in orders %}<tr><td>{{ o.order_number }}</td><td>{{ o.created_at.strftime("%d-%m-%Y %H:%M") }}</td><td>Rp {{ "{:,.0f}".format(o.total).replace(",", ".") }}</td><td><a href="{{ url_for('sale_detail', order_id=o.id) }}">Lihat</a></td></tr>{% endfor %}
+</tbody></table></div>{% else %}<p class="muted">Belum ada transaksi.</p>{% endif %}
+</section><p class="foot">Riwayat transaksi hanya menampilkan transaksi milik toko ini.</p></main>
+<script>
+document.getElementById('add-line')?.addEventListener('click',()=>{const first=document.querySelector('.sale-line');const clone=first.cloneNode(true);clone.querySelector('select').selectedIndex=0;clone.querySelector('input').value=1;document.getElementById('items').appendChild(clone);});
+</script></body></html>
