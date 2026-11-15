@@ -1,5 +1,6 @@
 import os
 import re
+import uuid
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
@@ -70,9 +71,22 @@ class Order(db.Model):
     shop_id = db.Column(db.Integer, db.ForeignKey("shops.id"), nullable=False, index=True)
     order_number = db.Column(db.String(40), nullable=False)
     total = db.Column(db.Integer, nullable=False, default=0)
-    status = db.Column(db.String(30), nullable=False, default="baru")
+    status = db.Column(db.String(30), nullable=False, default="selesai")
+    customer_id = db.Column(db.Integer, db.ForeignKey("customers.id"), nullable=True, index=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     __table_args__ = (db.UniqueConstraint("shop_id", "order_number", name="uq_order_shop_number"),)
+
+    
+class OrderItem(db.Model):
+    __tablename__ = "order_items"
+    id = db.Column(db.Integer, primary_key=True)
+    order_id = db.Column(db.Integer, db.ForeignKey("orders.id"), nullable=False, index=True)
+    product_id = db.Column(db.Integer, db.ForeignKey("products.id"), nullable=False)
+    product_name = db.Column(db.String(160), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False)
+    unit_price = db.Column(db.Integer, nullable=False)
+    subtotal = db.Column(db.Integer, nullable=False)
+    order = db.relationship("Order", backref=db.backref("items", cascade="all, delete-orphan"))
 
 
 def current_user():
@@ -173,6 +187,7 @@ def dashboard():
         product_count=Product.query.filter_by(shop_id=shop_id).count(),
         customer_count=Customer.query.filter_by(shop_id=shop_id).count(),
         order_count=Order.query.filter_by(shop_id=shop_id).count(),
+        sales_total=db.session.query(db.func.coalesce(db.func.sum(Order.total), 0)).filter_by(shop_id=shop_id).scalar(),
     )
 
 
@@ -237,6 +252,100 @@ def edit_product(product_id):
     return render_template("products.html", user=user, products=Product.query.filter_by(shop_id=user.shop_id).order_by(Product.name.asc()).all(), editing=product)
 
 
+
+@app.route("/sales", methods=["GET", "POST"])
+def sales():
+    user = current_user()
+    if not user:
+        return redirect(url_for("login"))
+
+    if request.method == "POST":
+        customer_name = request.form.get("customer_name", "").strip()
+        customer_phone = request.form.get("customer_phone", "").strip()
+        product_ids = request.form.getlist("product_id")
+        quantities = request.form.getlist("quantity")
+        requested = {}
+        try:
+            for raw_id, raw_qty in zip(product_ids, quantities):
+                if not raw_id:
+                    continue
+                product_id, qty = int(raw_id), int(raw_qty)
+                if qty < 1:
+                    raise ValueError("Jumlah setiap produk minimal 1.")
+                requested[product_id] = requested.get(product_id, 0) + qty
+            if not requested:
+                raise ValueError("Pilih minimal satu produk untuk transaksi.")
+            if customer_phone and not customer_name:
+                raise ValueError("Isi nama pelanggan jika nomor telepon dicantumkan.")
+            products_by_id = {
+                p.id: p for p in Product.query.filter(
+                    Product.shop_id == user.shop_id, Product.id.in_(requested.keys())
+                ).all()
+            }
+            if len(products_by_id) != len(requested):
+                raise ValueError("Ada produk yang tidak ditemukan di toko ini.")
+            for product_id, qty in requested.items():
+                if products_by_id[product_id].stock < qty:
+                    raise ValueError(f"Stok {products_by_id[product_id].name} tidak mencukupi.")
+            customer = None
+            if customer_name:
+                if customer_phone:
+                    customer = Customer.query.filter_by(
+                        shop_id=user.shop_id, phone=customer_phone
+                    ).first()
+                if customer:
+                    customer.name = customer_name
+                else:
+                    customer = Customer(shop_id=user.shop_id, name=customer_name,
+                                        phone=customer_phone or None)
+                    db.session.add(customer)
+                    db.session.flush()
+            order = Order(
+                shop_id=user.shop_id,
+                order_number="TRX-" + datetime.now().strftime("%y%m%d%H%M%S") + "-" + uuid.uuid4().hex[:4].upper(),
+                total=0, status="selesai",
+                customer_id=customer.id if customer else None
+            )
+            db.session.add(order)
+            db.session.flush()
+            total = 0
+            for product_id, qty in requested.items():
+                product = products_by_id[product_id]
+                line_total = product.price * qty
+                total += line_total
+                product.stock -= qty
+                db.session.add(OrderItem(
+                    order_id=order.id, product_id=product.id,
+                    product_name=product.name, quantity=qty,
+                    unit_price=product.price, subtotal=line_total
+                ))
+            order.total = total
+            db.session.commit()
+            flash(f"Transaksi {order.order_number} berhasil disimpan. Total {total:,}.".replace(",", "."), "success")
+            return redirect(url_for("sales"))
+        except (ValueError, TypeError) as exc:
+            db.session.rollback()
+            flash(str(exc), "error")
+        except Exception:
+            db.session.rollback()
+            app.logger.exception("Gagal menyimpan transaksi")
+            flash("Transaksi gagal disimpan. Periksa data lalu coba lagi.", "error")
+
+    product_list = Product.query.filter_by(shop_id=user.shop_id).order_by(Product.name.asc()).all()
+    order_list = Order.query.filter_by(shop_id=user.shop_id).order_by(Order.created_at.desc()).limit(50).all()
+    return render_template("sales.html", user=user, products=product_list, orders=order_list)
+
+
+@app.get("/sales/<int:order_id>")
+def sale_detail(order_id):
+    user = current_user()
+    if not user:
+        return redirect(url_for("login"))
+    order = Order.query.filter_by(id=order_id, shop_id=user.shop_id).first_or_404()
+    customer = db.session.get(Customer, order.customer_id) if order.customer_id else None
+    return render_template("sale_detail.html", user=user, order=order, customer=customer)
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "GD SMART ASSISTANT"}
@@ -250,6 +359,11 @@ def not_found(_error):
 
 with app.app_context():
     db.create_all()
+    # Add customer link for databases created by earlier versions.
+    from sqlalchemy import inspect, text
+    if "customer_id" not in {col["name"] for col in inspect(db.engine).get_columns("orders")}:
+        with db.engine.begin() as connection:
+            connection.execute(text("ALTER TABLE orders ADD COLUMN customer_id INTEGER REFERENCES customers(id)"))
 
 
 if __name__ == "__main__":
