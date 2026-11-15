@@ -34,3 +34,9 @@ Open `http://localhost:5000`.
 
 ## Important production work still required
 This is an initial account and tenant-isolation foundation, not a finished commercial SaaS. Before taking real customer data, add database migrations, automated security and tenant-isolation tests, email verification, password reset, rate limiting, backups, audit logging, billing/subscriptions, and operational monitoring. Customer management is currently captured during sales entry; standalone customer CRUD, order cancellation/refunds and stock restoration, payment methods, reports/exports, billing/subscriptions, and the AI integration are not implemented yet. Sales transactions reduce stock and preserve item name/price snapshots. Never use the development SECRET_KEY in production.
+
+## GD AI virtual assistant (initial version)
+- Open the assistant from the authenticated shop dashboard at `/assistant`.
+- The first version answers basic questions about recorded shop sales totals, transaction count, and products with stock of five units or less.
+- Queries are scoped to the signed-in user's `shop_id`; it does not read another shop's records.
+- This is a rule-based first integration, not a connected large-language model. Full conversational AI, voice input/output, a realistic human avatar asset, and AI provider credentials are still future work.
