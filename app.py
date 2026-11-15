@@ -346,6 +346,35 @@ def sale_detail(order_id):
     return render_template("sale_detail.html", user=user, order=order, customer=customer)
 
 
+@app.route("/assistant", methods=["GET", "POST"])
+def assistant():
+    user = current_user()
+    if not user:
+        return redirect(url_for("login"))
+    shop_id = user.shop_id
+    sales_total = db.session.query(db.func.coalesce(db.func.sum(Order.total), 0)).filter(Order.shop_id == shop_id).scalar()
+    order_count = Order.query.filter_by(shop_id=shop_id).count()
+    low_stock = Product.query.filter(Product.shop_id == shop_id, Product.stock <= 5).order_by(Product.stock.asc()).limit(10).all()
+    prompt = ""
+    answer = f"Halo, {user.full_name}! Saya GD AI. Saya bisa membantu membaca omzet, jumlah transaksi, dan stok toko."
+    if request.method == "POST":
+        prompt = request.form.get("prompt", "").strip()[:500]
+        question = prompt.lower()
+        if not prompt:
+            answer = "Silakan tulis pertanyaan terlebih dahulu."
+        elif any(word in question for word in ("omzet", "penjualan", "pendapatan")):
+            answer = (f"Total penjualan yang tercatat adalah Rp {sales_total:,.0f}. Ada {order_count} transaksi. Angka ini omzet, belum dikurangi modal dan biaya.").replace(",", ".")
+        elif any(word in question for word in ("transaksi", "pesanan", "order")):
+            answer = f"Ada {order_count} transaksi yang tercatat di toko Anda."
+        elif any(word in question for word in ("stok", "persediaan", "menipis", "habis")):
+            if low_stock:
+                answer = "Produk dengan stok 5 pcs atau kurang: " + "; ".join(f"{p.name}: {p.stock} pcs" for p in low_stock) + ". Silakan periksa kebutuhan restok."
+            else:
+                answer = "Tidak ada produk dengan stok 5 pcs atau kurang saat ini."
+        else:
+            answer = "Saya belum memahami pertanyaan itu. Coba tanyakan omzet toko, jumlah transaksi, atau stok menipis. Kemampuan AI percakapan penuh akan diaktifkan setelah penyedia AI dan API key dikonfigurasi."
+    return render_template("assistant.html", user=user, prompt=prompt, answer=answer, sales_total=sales_total, order_count=order_count, low_stock=low_stock)
+
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "GD SMART ASSISTANT"}
