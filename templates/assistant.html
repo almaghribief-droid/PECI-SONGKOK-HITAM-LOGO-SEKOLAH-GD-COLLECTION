@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GD AI Assistant</title><link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}"></head>
+<body><main class="wrap">
+<header class="top"><a class="brand" href="{{ url_for('dashboard') }}">GD SMART ASSISTANT <small>YOUR SMART BUSINESS PARTNER</small></a><a class="btn ghost small" href="{{ url_for('dashboard') }}">Kembali</a></header>
+<section class="assistant-shell">
+<p class="eyebrow">VIRTUAL SHOP ASSISTANT</p>
+<div class="assistant-profile"><div class="assistant-avatar" aria-label="Avatar GD AI">GD</div><div><h1>GD AI Assistant</h1><p class="muted">Asisten virtual toko · siap membantu {{ user.full_name }}</p><span class="assistant-status">● Terhubung ke data toko ini</span></div></div>
+<div class="assistant-note"><strong>Halo, {{ user.full_name }}!</strong><br>Saya GD AI. Saya bisa membantu memeriksa ringkasan penjualan dan stok toko Anda.</div>
+<div class="assistant-metrics"><div><small>Total omzet tercatat</small><strong>Rp {{ "{:,.0f}".format(sales_total).replace(",", ".") }}</strong></div><div><small>Jumlah transaksi</small><strong>{{ order_count }}</strong></div><div><small>Stok perlu dicek</small><strong>{{ low_stock|length }} produk</strong></div></div>
+<section class="assistant-chat"><h2>Percakapan</h2>
+{% if prompt %}<div class="chat-bubble user-bubble">{{ prompt }}</div>{% endif %}
+<div class="chat-bubble ai-bubble"><strong>GD AI</strong><p>{{ answer }}</p></div>
+<form method="post" action="{{ url_for('assistant') }}" class="assistant-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label for="prompt">Tulis pertanyaan</label><input id="prompt" name="prompt" maxlength="500" placeholder="Contoh: berapa omzet toko saya?" required><button class="btn" type="submit">Kirim pertanyaan</button></form>
+<div class="quick-questions"><span>Coba tanyakan:</span>
+<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="prompt" value="Berapa omzet toko saya?"><button type="submit">Cek omzet</button></form>
+<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="prompt" value="Berapa jumlah transaksi?"><button type="submit">Jumlah transaksi</button></form>
+<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="prompt" value="Produk apa yang stoknya menipis?"><button type="submit">Cek stok</button></form></div>
+</section><p class="assistant-disclaimer">Versi awal ini memakai aturan sederhana dan data toko yang sedang login, belum memakai model AI percakapan penuh dan belum menghitung laba bersih.</p>
+</section></main></body></html>
