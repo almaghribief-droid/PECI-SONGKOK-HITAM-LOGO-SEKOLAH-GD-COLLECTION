@@ -65,7 +65,7 @@ public class MainActivity extends Activity {
 
         heading(root,"2. LABEL SHOPEE / TIKTOK SHOP");
         TextView info=new TextView(this);
-        info.setText("Pilih file label yang sudah diunduh dari Seller Centre (PDF atau gambar). Aplikasi tidak mengambil label langsung dari akun marketplace.");
+        info.setText("Shopee otomatis horizontal / landscape. TikTok Shop otomatis vertikal / portrait. Pilih file label yang sudah diunduh dari Seller Centre (PDF atau gambar); aplikasi tidak mengambil label langsung dari akun marketplace.");
         info.setTextSize(12); info.setTextColor(0xFF526174); root.addView(info);
         addButton(root,"AMBIL LABEL SHOPEE (PDF / GAMBAR)",v->openLabelPicker("Shopee"));
         addButton(root,"AMBIL LABEL TIKTOK SHOP (PDF / GAMBAR)",v->openLabelPicker("TikTok Shop"));
@@ -73,7 +73,7 @@ public class MainActivity extends Activity {
 
         heading(root,"3. CROP LABEL");
         TextView cropHelp=new TextView(this);
-        cropHelp.setText("Geser bagian dalam kotak untuk memindahkan crop. Tarik titik biru kanan bawah untuk mengubah ukuran crop.");
+        cropHelp.setText("Orientasi label mengikuti marketplace. Geser bagian dalam kotak untuk memindahkan crop dan tarik titik sudut biru untuk mengubah area crop.");
         cropHelp.setTextSize(12); cropHelp.setTextColor(0xFF526174); root.addView(cropHelp);
         cropView=new CropImageView(this);
         LinearLayout.LayoutParams cropParams=new LinearLayout.LayoutParams(-1,dp(290)); cropParams.topMargin=dp(8); root.addView(cropView,cropParams);
@@ -168,10 +168,21 @@ public class MainActivity extends Activity {
         if(requestCode==REQ_LABEL&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){
             Uri uri=data.getData();try{
                 Bitmap b=decodeDocument(uri);if(b==null)throw new Exception("File tidak dapat dibaca.");
-                sourceBitmap=b;cropView.setBitmap(b);sourceLabel.setText(selectedChannel+" • "+b.getWidth()+" × "+b.getHeight()+" px");
+                sourceBitmap=normalizeOrientation(b,selectedChannel);cropView.setBitmap(sourceBitmap);sourceLabel.setText(selectedChannel+" • "+sourceBitmap.getWidth()+" × "+sourceBitmap.getHeight()+" px • "+orientationName(selectedChannel));
                 updatePreview();setStatus("Label "+selectedChannel+" berhasil dimuat. Atur crop sebelum cetak.");
             }catch(Exception e){setStatus("Gagal membuka label: "+e.getMessage());}
         }
+    }
+    private String orientationName(String channel){return "TikTok Shop".equals(channel)?"Vertikal / Portrait":"Shopee".equals(channel)?"Horizontal / Landscape":"Asli";}
+    private Bitmap normalizeOrientation(Bitmap bitmap,String channel){
+        if(bitmap==null||"label".equals(channel))return bitmap;
+        boolean wantPortrait="TikTok Shop".equals(channel);
+        boolean isPortrait=bitmap.getHeight()>=bitmap.getWidth();
+        if(wantPortrait==isPortrait)return bitmap;
+        Matrix matrix=new Matrix();matrix.postRotate(90f);
+        Bitmap rotated=Bitmap.createBitmap(bitmap,0,0,bitmap.getWidth(),bitmap.getHeight(),matrix,true);
+        if(rotated!=bitmap)bitmap.recycle();
+        return rotated;
     }
     private Bitmap decodeDocument(Uri uri)throws Exception{
         String type=getContentResolver().getType(uri);
@@ -193,7 +204,7 @@ public class MainActivity extends Activity {
     private File templateDir(){File d=new File(getFilesDir(),"templates");if(!d.exists())d.mkdirs();return d;}
     private void saveTemplate(){
         if(sourceBitmap==null){setStatus("Pilih dan crop label terlebih dahulu.");return;}
-        try{Bitmap b=cropView.getCroppedBitmap();File f=new File(templateDir(),"template_"+System.currentTimeMillis()+".png");
+        try{Bitmap b=cropView.getCroppedBitmap();File f=new File(templateDir(),"template_"+selectedChannel.replaceAll("[^A-Za-z]","")+"_"+System.currentTimeMillis()+".png");
             FileOutputStream out=new FileOutputStream(f);b.compress(Bitmap.CompressFormat.PNG,100,out);out.close();
             refreshTemplates();setStatus("Template crop berhasil disimpan.");
         }catch(Exception e){setStatus("Gagal menyimpan template: "+e.getMessage());}
